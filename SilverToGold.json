@@ -1,0 +1,368 @@
+{
+    "name": "SilverToGold",
+    "properties": {
+        "activities": [
+            {
+                "name": "GetFolderNamesSilver",
+                "type": "GetMetadata",
+                "dependsOn": [],
+                "policy": {
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "Parquet1SilverFolders",
+                        "type": "DatasetReference"
+                    },
+                    "fieldList": [
+                        "childItems"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureBlobFSReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "ParquetReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "ForEachSilverFolder",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "GetFolderNamesSilver",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('GetFolderNamesSilver').output.childItems",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "SetCurrentFolder",
+                            "type": "SetVariable",
+                            "dependsOn": [],
+                            "policy": {
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "variableName": "current_folder",
+                                "value": {
+                                    "value": "@item().name",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        {
+                            "name": "IfNotProcessing",
+                            "type": "IfCondition",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@not(equals(variables('current_folder'),'processing'))",
+                                    "type": "Expression"
+                                },
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "CopySilverToGoldProcessing",
+                                        "type": "Copy",
+                                        "dependsOn": [],
+                                        "policy": {
+                                            "retry": 0,
+                                            "retryIntervalInSeconds": 30,
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "source": {
+                                                "type": "ParquetSource",
+                                                "storeSettings": {
+                                                    "type": "AzureBlobFSReadSettings",
+                                                    "recursive": true,
+                                                    "wildcardFileName": "*.parquet"
+                                                },
+                                                "formatSettings": {
+                                                    "type": "ParquetReadSettings"
+                                                }
+                                            },
+                                            "sink": {
+                                                "type": "ParquetSink",
+                                                "storeSettings": {
+                                                    "type": "AzureBlobFSWriteSettings"
+                                                },
+                                                "formatSettings": {
+                                                    "type": "ParquetWriteSettings"
+                                                }
+                                            },
+                                            "enableStaging": false
+                                        },
+                                        "inputs": [
+                                            {
+                                                "referenceName": "Parquet1SilverFolders",
+                                                "type": "DatasetReference"
+                                            }
+                                        ],
+                                        "outputs": [
+                                            {
+                                                "referenceName": "ParquetGoldProcessing",
+                                                "type": "DatasetReference"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "NotebookSIlverToGold",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "ForEachSilverFolder",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": {
+                            "value": "ProcessSilverFilesToGoldLayer",
+                            "type": "Expression"
+                        },
+                        "type": "NotebookReference"
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": {
+                            "value": "openfda",
+                            "type": "Expression"
+                        },
+                        "type": "BigDataPoolReference"
+                    },
+                    "executorSize": "Small",
+                    "conf": {
+                        "spark.dynamicAllocation.minExecutors": 1,
+                        "spark.dynamicAllocation.maxExecutors": 1
+                    },
+                    "driverSize": "Small",
+                    "numExecutors": 1
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzureSynapseArtifacts1",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "ClearGoldProcessing",
+                "type": "Delete",
+                "dependsOn": [
+                    {
+                        "activity": "NotebookSIlverToGold",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "ParquetGoldProcessing",
+                        "type": "DatasetReference"
+                    },
+                    "enableLogging": false,
+                    "storeSettings": {
+                        "type": "AzureBlobFSReadSettings",
+                        "recursive": true,
+                        "enablePartitionDiscovery": false
+                    }
+                }
+            },
+            {
+                "name": "ProcessGoldToCuratedRWE",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "ClearGoldProcessing",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": {
+                            "value": "ProcessGoldToCurated",
+                            "type": "Expression"
+                        },
+                        "type": "NotebookReference"
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": {
+                            "value": "openfda",
+                            "type": "Expression"
+                        },
+                        "type": "BigDataPoolReference"
+                    },
+                    "executorSize": "Small",
+                    "conf": {
+                        "spark.dynamicAllocation.minExecutors": 1,
+                        "spark.dynamicAllocation.maxExecutors": 1
+                    },
+                    "driverSize": "Small",
+                    "numExecutors": 1
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzureSynapseArtifacts1",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "GoldML-Ready",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "ProcessGoldToCuratedRWE",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": {
+                            "value": "PrepareGoldForML",
+                            "type": "Expression"
+                        },
+                        "type": "NotebookReference"
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": {
+                            "value": "openfda",
+                            "type": "Expression"
+                        },
+                        "type": "BigDataPoolReference"
+                    },
+                    "executorSize": "Small",
+                    "conf": {
+                        "spark.dynamicAllocation.minExecutors": 1,
+                        "spark.dynamicAllocation.maxExecutors": 1
+                    },
+                    "driverSize": "Small",
+                    "numExecutors": 1
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzureSynapseArtifacts1",
+                    "type": "LinkedServiceReference"
+                }
+            },
+            {
+                "name": "TrainGoldMLModel",
+                "type": "SynapseNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "GoldML-Ready",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "notebook": {
+                        "referenceName": {
+                            "value": "TrainGoldMLModel",
+                            "type": "Expression"
+                        },
+                        "type": "NotebookReference"
+                    },
+                    "snapshot": true,
+                    "sparkPool": {
+                        "referenceName": {
+                            "value": "openfda",
+                            "type": "Expression"
+                        },
+                        "type": "BigDataPoolReference"
+                    },
+                    "executorSize": "Small",
+                    "conf": {
+                        "spark.dynamicAllocation.minExecutors": 1,
+                        "spark.dynamicAllocation.maxExecutors": 1
+                    },
+                    "driverSize": "Small",
+                    "numExecutors": 1
+                },
+                "linkedServiceName": {
+                    "referenceName": "AzureSynapseArtifacts1",
+                    "type": "LinkedServiceReference"
+                }
+            }
+        ],
+        "variables": {
+            "current_folder": {
+                "type": "String"
+            }
+        },
+        "annotations": [],
+        "lastPublishTime": "2025-08-28T10:57:16Z"
+    },
+    "type": "Microsoft.DataFactory/factories/pipelines"
+}

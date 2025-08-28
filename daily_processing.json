@@ -1,0 +1,63 @@
+{
+    "name": "daily_processing",
+    "properties": {
+        "activities": [
+            {
+                "name": "BlobtoBronze Execution",
+                "type": "ExecutePipeline",
+                "dependsOn": [],
+                "policy": {
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "BlobtoBronze",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true
+                }
+            },
+            {
+                "name": "SilverToGold Execution",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "Wait5Min",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "SilverToGold",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true
+                }
+            },
+            {
+                "name": "Wait5Min",
+                "type": "Wait",
+                "dependsOn": [
+                    {
+                        "activity": "BlobtoBronze Execution",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "waitTimeInSeconds": 300
+                }
+            }
+        ],
+        "annotations": []
+    }
+}
